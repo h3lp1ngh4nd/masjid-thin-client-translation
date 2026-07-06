@@ -2,18 +2,15 @@
 
 Dumb external relay for the live-caption `/volg` read-along page.
 
-The main caption app stays local in the masjid. This repo only mirrors the
-existing `/ws/view` stream to an external VPS so phones can read captions from a
-public URL without connecting to the local caption server.
+The main caption app stays local in the masjid and opens the outbound uplink to
+this relay itself. This repo is VPS-only: it receives that trusted uplink,
+serves the static `/volg` page, and fans caption messages out to phones.
 
 ## Shape
 
 ```text
 Masjid laptop
-  live-caption app /ws/view
-        |
-        v
-  src/uplink-client.js
+  live-caption app external relay client
         |
         v
 VPS src/relay-server.js
@@ -24,7 +21,7 @@ Phones /volg
 
 The relay does not run ASR, translation, Quran matching, or finalizer logic. It
 receives the same messages the local `/volg` browser receives and rebroadcasts
-them.
+them. There is no separate Node uplink process on the masjid laptop.
 
 ## Install
 
@@ -62,19 +59,18 @@ Health check:
 curl http://127.0.0.1:8080/health
 ```
 
-## Masjid Laptop Uplink
+## Main App Uplink
 
-Run this on the same machine as the local caption app:
+Configure the main live-caption app on the masjid laptop:
 
-```bash
-LOCAL_VIEW_WS=ws://127.0.0.1:8000/ws/view \
-RELAY_UPLINK_WS=wss://your-domain.example/ws/uplink \
-RELAY_TOKEN=change-this \
-npm run uplink
+```env
+EXTERNAL_VOLG_RELAY_ENABLED=true
+EXTERNAL_VOLG_RELAY_URL=wss://your-domain.example/ws/uplink
+EXTERNAL_VOLG_RELAY_TOKEN=change-this
 ```
 
-The uplink reconnects automatically. If the VPS is down, the local caption app
-continues normally.
+The main app reconnects automatically and mirrors viewer messages best-effort.
+If the VPS is down, the local caption app continues normally.
 
 ## PM2
 
@@ -84,16 +80,6 @@ On the VPS:
 RELAY_TOKEN=change-this PORT=8080 \
   /home/xmrhooligan/.npm-global/bin/pm2 start ecosystem.config.cjs \
   --only masjid-volg-relay
-```
-
-On the masjid laptop:
-
-```bash
-LOCAL_VIEW_WS=ws://127.0.0.1:8000/ws/view \
-RELAY_UPLINK_WS=wss://your-domain.example/ws/uplink \
-RELAY_TOKEN=change-this \
-  /home/xmrhooligan/.npm-global/bin/pm2 start ecosystem.config.cjs \
-  --only masjid-volg-uplink
 ```
 
 Save after starting:
@@ -109,11 +95,9 @@ Save after starting:
   caption repopulates it.
 - Phone traffic goes to the VPS. If phones use masjid Wi-Fi, they still consume
   Wi-Fi airtime, but they no longer fan out from the local caption server.
-- Both legs send websocket pings every `HEARTBEAT_MS` (default 30s) and treat
-  a missed pong as a dead connection. This keeps the uplink alive through
-  NAT/proxy idle timeouts during the days between khutbahs and reaps dead
-  phone connections on the VPS. Keep any reverse-proxy read timeout above the
-  heartbeat interval.
+- The VPS sends websocket pings every `HEARTBEAT_MS` (default 30s) and treats a
+  missed pong as a dead connection. Keep any reverse-proxy read timeout above
+  the heartbeat interval.
 - `public/volg.html` is a verbatim copy of `app/templates/volg.html` from the
   main live-caption repo (the page is fully static). When that file changes,
-  copy it here again — do not let the two drift.
+  update this repo and `git pull` on the VPS.

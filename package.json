@@ -7,8 +7,7 @@
   "scripts": {
     "start": "node src/relay-server.js",
     "server": "node src/relay-server.js",
-    "uplink": "node src/uplink-client.js",
-    "check": "node --check src/relay-server.js && node --check src/uplink-client.js"
+    "check": "node --check src/relay-server.js"
   },
   "dependencies": {
     "ws": "^8.18.0"
