@@ -35,6 +35,10 @@ const host = process.env.HOST || "0.0.0.0";
 const port = Number.parseInt(process.env.PORT || "8080", 10);
 const relayToken = String(process.env.RELAY_TOKEN || "").trim();
 const maxCaptions = Math.max(1, Number.parseInt(process.env.MAX_CAPTIONS || "100", 10));
+const volgHeaderText = process.env.VOLG_HEADER_TEXT || "live";
+const volgEmptyText = process.env.VOLG_EMPTY_TEXT || "Wachten op vertaling...";
+const volgFooterText = process.env.VOLG_FOOTER_TEXT
+  || "Live vertaling is in BETA. Er kunnen fouten voorkomen.";
 // Reap connections that stop answering pings. Without this, NAT tables and
 // reverse proxies silently kill idle sockets (the uplink idles for days
 // between khutbahs) and dead viewers linger in memory.
@@ -173,6 +177,31 @@ function contentTypeFor(filePath) {
   return "application/octet-stream";
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function escapeScriptString(value) {
+  return JSON.stringify(String(value ?? ""))
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
+function renderVolgHtml(data) {
+  return String(data)
+    .replaceAll("__VOLG_HEADER_TEXT_JSON__", escapeScriptString(volgHeaderText))
+    .replaceAll("__VOLG_EMPTY_TEXT__", escapeHtml(volgEmptyText))
+    .replaceAll("__VOLG_FOOTER_TEXT__", escapeHtml(volgFooterText));
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
 
@@ -198,7 +227,7 @@ const server = http.createServer((req, res) => {
       return;
     }
     res.writeHead(200, { "content-type": contentTypeFor(filePath) });
-    res.end(data);
+    res.end(fileName === "volg.html" ? renderVolgHtml(data) : data);
   });
 });
 

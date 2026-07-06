@@ -52,6 +52,9 @@ PORT=8080
 RELAY_TOKEN=change-this
 MAX_CAPTIONS=100
 HEARTBEAT_MS=30000
+VOLG_HEADER_TEXT=live
+VOLG_EMPTY_TEXT=Wachten op vertaling...
+VOLG_FOOTER_TEXT=Live vertaling is in BETA. Er kunnen fouten voorkomen.
 ```
 
 Run with PM2:
@@ -120,6 +123,8 @@ Save after starting:
 - The VPS sends websocket pings every `HEARTBEAT_MS` (default 30s) and treats a
   missed pong as a dead connection. Keep any reverse-proxy read timeout above
   the heartbeat interval.
-- `public/volg.html` is a verbatim copy of `app/templates/volg.html` from the
-  main live-caption repo (the page is fully static). When that file changes,
-  update this repo and `git pull` on the VPS.
+- `VOLG_HEADER_TEXT`, `VOLG_EMPTY_TEXT`, and `VOLG_FOOTER_TEXT` control the
+  connected status label, waiting text, and bottom disclaimer on `/volg`.
+- `public/volg.html` mirrors `app/templates/volg.html` from the main
+  live-caption repo, with relay-rendered placeholders for the configurable
+  copy. When that file changes, update this repo and `git pull` on the VPS.

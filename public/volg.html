@@ -82,11 +82,12 @@
 <body>
   <div id="status">verbinden…</div>
   <main id="captions" aria-live="polite">
-    <div id="empty">Wachten op vertaling...</div>
+    <div id="empty">__VOLG_EMPTY_TEXT__</div>
   </main>
-  <footer id="betaNotice">Live vertaling is in BETA. Er kunnen fouten voorkomen.</footer>
+  <footer id="betaNotice">__VOLG_FOOTER_TEXT__</footer>
 
   <script>
+    const connectedStatusText = __VOLG_HEADER_TEXT_JSON__;
     const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
     const statusEl = document.getElementById('status');
     const captionsEl = document.getElementById('captions');
@@ -166,7 +167,7 @@
       ws = socket;
       socket.onopen = () => {
         reconnectAttempts = 0;
-        setStatus('live');
+        setStatus(connectedStatusText);
       };
       socket.onmessage = event => {
         try {
