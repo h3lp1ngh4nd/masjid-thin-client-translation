@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1220" />
+  <title>Meelezen - Live Caption</title>
+  <link rel="icon" href="data:," />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1220;
+      --text: #f3f6fb;
+      --history: #9aa7ba;
+      --current-bg: rgba(56, 189, 248, 0.10);
+      --current-border: #38bdf8;
+      --status: #64748b;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", Roboto, Arial, sans-serif;
+    }
+    #status {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: calc(env(safe-area-inset-top, 0px) + 6px) 12px 6px;
+      font-size: 0.8rem;
+      color: var(--status);
+      background: linear-gradient(var(--bg) 75%, transparent);
+      z-index: 2;
+      text-align: center;
+    }
+    #status.offline { color: #fca5a5; }
+    #captions {
+      padding: calc(env(safe-area-inset-top, 0px) + 2.4rem) 1rem
+        calc(env(safe-area-inset-bottom, 0px) + 1.5rem);
+      max-width: 44rem;
+      margin: 0 auto;
+    }
+    .caption {
+      color: var(--history);
+      font-size: 1.15rem;
+      line-height: 1.5;
+      margin: 0 0 0.9rem;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .caption.current {
+      color: var(--text);
+      font-size: 1.3rem;
+      background: var(--current-bg);
+      border-left: 3px solid var(--current-border);
+      border-radius: 8px;
+      padding: 0.6rem 0.8rem;
+    }
+    #empty {
+      color: var(--status);
+      text-align: center;
+      margin-top: 40vh;
+      font-size: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <div id="status">verbinden...</div>
+  <main id="captions" aria-live="polite">
+    <div id="empty">Wachten op ondertitels...</div>
+  </main>
+
+  <script>
+    const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const statusEl = document.getElementById('status');
+    const captionsEl = document.getElementById('captions');
+    const emptyEl = document.getElementById('empty');
+    const maxCaptions = 50;
+
+    let ws = null;
+    let reconnectTimer = null;
+    let reconnectAttempts = 0;
+    let seenIds = [];
+
+    function setStatus(text, offline = false) {
+      statusEl.textContent = text;
+      statusEl.classList.toggle('offline', offline);
+    }
+
+    function nearBottom() {
+      const doc = document.documentElement;
+      return window.innerHeight + window.scrollY >= doc.scrollHeight - 120;
+    }
+
+    function captionIds(caption) {
+      const ids = [];
+      if (caption && caption.id) ids.push(String(caption.id));
+      if (caption && Array.isArray(caption.merged_caption_ids)) {
+        caption.merged_caption_ids.forEach(id => {
+          const normalized = String(id || '').trim();
+          if (normalized && !ids.includes(normalized)) ids.push(normalized);
+        });
+      }
+      return ids;
+    }
+
+    function addCaption(caption, scroll = true) {
+      if (!caption || !caption.text) return;
+      const ids = captionIds(caption);
+      if (ids.some(id => seenIds.includes(id))) return;
+      seenIds.push(...ids);
+      if (seenIds.length > maxCaptions * 4) {
+        seenIds = seenIds.slice(-maxCaptions * 2);
+      }
+      emptyEl.hidden = true;
+      const stickToBottom = scroll && nearBottom();
+      const previous = captionsEl.querySelector('.caption.current');
+      if (previous) previous.classList.remove('current');
+      const row = document.createElement('p');
+      row.className = 'caption current';
+      row.textContent = caption.text;
+      captionsEl.appendChild(row);
+      while (captionsEl.querySelectorAll('.caption').length > maxCaptions) {
+        captionsEl.querySelector('.caption').remove();
+      }
+      if (stickToBottom) {
+        window.scrollTo({ top: document.documentElement.scrollHeight });
+      }
+    }
+
+    function clearCaptions() {
+      captionsEl.querySelectorAll('.caption').forEach(row => row.remove());
+      seenIds = [];
+      emptyEl.hidden = false;
+    }
+
+    function scheduleReconnect() {
+      if (reconnectTimer) return;
+      const delay = Math.min(500 * (2 ** reconnectAttempts), 5000);
+      reconnectAttempts += 1;
+      setStatus('verbinding verbroken - opnieuw verbinden...', true);
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        connect();
+      }, delay);
+    }
+
+    function connect() {
+      const socket = new WebSocket(`${wsProto}://${location.host}/ws/view`);
+      ws = socket;
+      socket.onopen = () => {
+        reconnectAttempts = 0;
+        setStatus('live');
+      };
+      socket.onmessage = event => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.type === 'display_state') {
+            const stickToBottom = nearBottom();
+            clearCaptions();
+            (Array.isArray(message.captions) ? message.captions : [])
+              .forEach(caption => addCaption(caption, false));
+            if (stickToBottom) {
+              window.scrollTo({ top: document.documentElement.scrollHeight });
+            }
+          } else if (message.type === 'caption') {
+            addCaption(message.caption);
+          } else if (message.type === 'clear_captions') {
+            clearCaptions();
+          }
+        } catch (error) {
+          console.error('volg message error', error);
+        }
+      };
+      socket.onclose = () => {
+        if (ws === socket) scheduleReconnect();
+      };
+      socket.onerror = () => socket.close();
+    }
+
+    let wakeLock = null;
+    async function requestWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+        }
+      } catch (error) {
+        wakeLock = null;
+      }
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') requestWakeLock();
+    });
+
+    connect();
+    requestWakeLock();
+  </script>
+</body>
+</html>

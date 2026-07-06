@@ -1,0 +1,19 @@
+{
+  "name": "masjid-thin-client-translation",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Dumb external relay for the masjid live caption /volg stream.",
+  "type": "module",
+  "scripts": {
+    "start": "node src/relay-server.js",
+    "server": "node src/relay-server.js",
+    "uplink": "node src/uplink-client.js",
+    "check": "node --check src/relay-server.js && node --check src/uplink-client.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
