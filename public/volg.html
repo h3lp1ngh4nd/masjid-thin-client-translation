@@ -39,7 +39,7 @@
     #status.offline { color: #fca5a5; }
     #captions {
       padding: calc(env(safe-area-inset-top, 0px) + 2.4rem) 1rem
-        calc(env(safe-area-inset-bottom, 0px) + 1.5rem);
+        calc(env(safe-area-inset-bottom, 0px) + 3.4rem);
       max-width: 44rem;
       margin: 0 auto;
     }
@@ -65,13 +65,26 @@
       margin-top: 40vh;
       font-size: 1rem;
     }
+    #betaNotice {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      padding: 0.45rem 1rem calc(env(safe-area-inset-bottom, 0px) + 0.45rem);
+      color: var(--status);
+      background: linear-gradient(transparent, var(--bg) 35%);
+      font-size: 0.75rem;
+      text-align: center;
+      z-index: 2;
+    }
   </style>
 </head>
 <body>
   <div id="status">verbinden…</div>
   <main id="captions" aria-live="polite">
-    <div id="empty">Wachten op ondertitels…</div>
+    <div id="empty">Wachten op vertaling...</div>
   </main>
+  <footer id="betaNotice">Live vertaling is in BETA. Er kunnen fouten voorkomen.</footer>
 
   <script>
     const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
