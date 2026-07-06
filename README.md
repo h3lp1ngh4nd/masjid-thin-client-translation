@@ -40,23 +40,46 @@ RELAY_TOKEN=change-this
 
 ## VPS
 
-Run the relay server on the VPS:
+Point DNS for `volg.alhouda.nl` at the VPS, then run the relay behind a HTTPS
+reverse proxy. Keep Node on localhost; let Caddy or Nginx own public ports
+`80` and `443`.
 
-```bash
-HOST=0.0.0.0 PORT=8080 RELAY_TOKEN=change-this npm run server
+Create `.env` on the VPS:
+
+```env
+HOST=127.0.0.1
+PORT=8080
+RELAY_TOKEN=change-this
+MAX_CAPTIONS=100
+HEARTBEAT_MS=30000
 ```
 
-Expose it through HTTPS, for example with Caddy or Nginx. The public mobile URL
-is:
+Run with PM2:
+
+```bash
+/home/xmrhooligan/.npm-global/bin/pm2 start ecosystem.config.cjs \
+  --only masjid-volg-relay --update-env
+/home/xmrhooligan/.npm-global/bin/pm2 save
+```
+
+Caddy example:
+
+```caddyfile
+volg.alhouda.nl {
+  reverse_proxy 127.0.0.1:8080
+}
+```
+
+The public mobile URL is:
 
 ```text
-https://your-domain.example/volg
+https://volg.alhouda.nl/volg
 ```
 
 Health check:
 
 ```bash
-curl http://127.0.0.1:8080/health
+curl https://volg.alhouda.nl/health
 ```
 
 ## Main App Uplink
@@ -65,7 +88,7 @@ Configure the main live-caption app on the masjid laptop:
 
 ```env
 EXTERNAL_VOLG_RELAY_ENABLED=true
-EXTERNAL_VOLG_RELAY_URL=wss://your-domain.example/ws/uplink
+EXTERNAL_VOLG_RELAY_URL=wss://volg.alhouda.nl/ws/uplink
 EXTERNAL_VOLG_RELAY_TOKEN=change-this
 ```
 
@@ -74,12 +97,11 @@ If the VPS is down, the local caption app continues normally.
 
 ## PM2
 
-On the VPS:
+On the VPS, after `.env` exists:
 
 ```bash
-RELAY_TOKEN=change-this PORT=8080 \
-  /home/xmrhooligan/.npm-global/bin/pm2 start ecosystem.config.cjs \
-  --only masjid-volg-relay
+/home/xmrhooligan/.npm-global/bin/pm2 start ecosystem.config.cjs \
+  --only masjid-volg-relay --update-env
 ```
 
 Save after starting:
