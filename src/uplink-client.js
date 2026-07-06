@@ -5,6 +5,12 @@ const relayUplinkWs = String(process.env.RELAY_UPLINK_WS || "").trim();
 const relayToken = String(process.env.RELAY_TOKEN || "").trim();
 const reconnectMinMs = Number.parseInt(process.env.RECONNECT_MIN_MS || "500", 10);
 const reconnectMaxMs = Number.parseInt(process.env.RECONNECT_MAX_MS || "5000", 10);
+// Detect silently dead sockets (NAT/proxy timeouts during the idle days
+// between khutbahs). A missed pong on either leg forces a reconnect.
+const heartbeatMs = Math.max(
+  1000,
+  Number.parseInt(process.env.HEARTBEAT_MS || "30000", 10),
+);
 
 if (!relayUplinkWs) {
   console.error("RELAY_UPLINK_WS is required.");
@@ -13,12 +19,6 @@ if (!relayUplinkWs) {
 if (!relayToken) {
   console.error("RELAY_TOKEN is required.");
   process.exit(1);
-}
-
-function withToken(rawUrl) {
-  const url = new URL(rawUrl);
-  url.searchParams.set("token", relayToken);
-  return url.toString();
 }
 
 function sleep(ms) {
@@ -42,7 +42,10 @@ async function runBridge() {
 
     try {
       console.log(`connecting relay ${relayUplinkWs}`);
-      relay = new WebSocket(withToken(relayUplinkWs));
+      // Token travels as a header so it never lands in proxy access logs.
+      relay = new WebSocket(relayUplinkWs, {
+        headers: { "x-relay-token": relayToken },
+      });
       await waitOpen(relay, "relay");
 
       console.log(`connecting local viewer ${localViewWs}`);
@@ -54,11 +57,36 @@ async function runBridge() {
 
       await new Promise((resolve) => {
         let done = false;
+        let heartbeatTimer = null;
         const finish = () => {
           if (done) return;
           done = true;
+          if (heartbeatTimer) clearInterval(heartbeatTimer);
           resolve();
         };
+
+        for (const ws of [local, relay]) {
+          ws.isAlive = true;
+          ws.on("pong", () => {
+            ws.isAlive = true;
+          });
+        }
+        heartbeatTimer = setInterval(() => {
+          for (const ws of [local, relay]) {
+            if (ws.isAlive === false) {
+              console.error("heartbeat missed; reconnecting");
+              finish();
+              return;
+            }
+            ws.isAlive = false;
+            try {
+              ws.ping();
+            } catch {
+              finish();
+              return;
+            }
+          }
+        }, heartbeatMs);
 
         local.on("message", (data) => {
           if (relay.readyState === WebSocket.OPEN) {

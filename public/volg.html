@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b1220" />
-  <title>Meelezen - Live Caption</title>
+  <title>Meelezen — Live Caption</title>
   <link rel="icon" href="data:," />
   <style>
     :root {
@@ -68,9 +68,9 @@
   </style>
 </head>
 <body>
-  <div id="status">verbinden...</div>
+  <div id="status">verbinden…</div>
   <main id="captions" aria-live="polite">
-    <div id="empty">Wachten op ondertitels...</div>
+    <div id="empty">Wachten op ondertitels…</div>
   </main>
 
   <script>
@@ -141,7 +141,7 @@
       if (reconnectTimer) return;
       const delay = Math.min(500 * (2 ** reconnectAttempts), 5000);
       reconnectAttempts += 1;
-      setStatus('verbinding verbroken - opnieuw verbinden...', true);
+      setStatus('verbinding verbroken — opnieuw verbinden…', true);
       reconnectTimer = setTimeout(() => {
         reconnectTimer = null;
         connect();
@@ -159,6 +159,8 @@
         try {
           const message = JSON.parse(event.data);
           if (message.type === 'display_state') {
+            // Reconnect backfill: only follow to the newest caption if the
+            // reader was already at the bottom before the rebuild.
             const stickToBottom = nearBottom();
             clearCaptions();
             (Array.isArray(message.captions) ? message.captions : [])
@@ -171,6 +173,7 @@
           } else if (message.type === 'clear_captions') {
             clearCaptions();
           }
+          // display_settings/test_state are projector concerns; ignored here.
         } catch (error) {
           console.error('volg message error', error);
         }
@@ -181,6 +184,8 @@
       socket.onerror = () => socket.close();
     }
 
+    // Best-effort screen wake lock so the phone stays readable during the
+    // khutbah; silently unsupported on older browsers/plain http.
     let wakeLock = null;
     async function requestWakeLock() {
       try {

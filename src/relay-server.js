@@ -11,6 +11,13 @@ const host = process.env.HOST || "0.0.0.0";
 const port = Number.parseInt(process.env.PORT || "8080", 10);
 const relayToken = String(process.env.RELAY_TOKEN || "").trim();
 const maxCaptions = Math.max(1, Number.parseInt(process.env.MAX_CAPTIONS || "100", 10));
+// Reap connections that stop answering pings. Without this, NAT tables and
+// reverse proxies silently kill idle sockets (the uplink idles for days
+// between khutbahs) and dead viewers linger in memory.
+const heartbeatMs = Math.max(
+  1000,
+  Number.parseInt(process.env.HEARTBEAT_MS || "30000", 10),
+);
 
 if (!relayToken) {
   console.error("RELAY_TOKEN is required.");
@@ -20,17 +27,21 @@ if (!relayToken) {
 const viewers = new Set();
 const uplinks = new Set();
 
-let state = {
-  type: "display_state",
-  settings: {},
-  max_paced_caption_wait_ms: 0,
-  test_mode: false,
-  test_captions: [],
-  captions: [],
-  published_captions: [],
-  display_caption_statuses: [],
-  audit_events: [],
-};
+function emptyState() {
+  return {
+    type: "display_state",
+    settings: {},
+    max_paced_caption_wait_ms: 0,
+    test_mode: false,
+    test_captions: [],
+    captions: [],
+    published_captions: [],
+    display_caption_statuses: [],
+    audit_events: [],
+  };
+}
+
+let state = emptyState();
 
 function sendJson(ws, payload) {
   if (ws.readyState !== WebSocket.OPEN) return;
@@ -80,8 +91,10 @@ function applyMessage(message) {
   if (!message || typeof message !== "object") return null;
 
   if (message.type === "display_state") {
+    // Replace, never merge: a display_state is a full snapshot, and merging
+    // onto the previous state would keep stale fields the new snapshot omits.
     state = {
-      ...state,
+      ...emptyState(),
       ...message,
       type: "display_state",
       captions: Array.isArray(message.captions) ? [...message.captions] : [],
@@ -168,7 +181,35 @@ const server = http.createServer((req, res) => {
 const viewerWss = new WebSocketServer({ noServer: true });
 const uplinkWss = new WebSocketServer({ noServer: true });
 
+function trackLiveness(ws) {
+  ws.isAlive = true;
+  ws.on("pong", () => {
+    ws.isAlive = true;
+  });
+}
+
+const heartbeatTimer = setInterval(() => {
+  for (const pool of [viewers, uplinks]) {
+    for (const ws of pool) {
+      if (ws.isAlive === false) {
+        pool.delete(ws);
+        ws.terminate();
+        continue;
+      }
+      ws.isAlive = false;
+      try {
+        ws.ping();
+      } catch {
+        pool.delete(ws);
+        ws.terminate();
+      }
+    }
+  }
+}, heartbeatMs);
+heartbeatTimer.unref();
+
 viewerWss.on("connection", (ws) => {
+  trackLiveness(ws);
   viewers.add(ws);
   sendJson(ws, state);
   ws.on("close", () => viewers.delete(ws));
@@ -176,6 +217,7 @@ viewerWss.on("connection", (ws) => {
 });
 
 uplinkWss.on("connection", (ws) => {
+  trackLiveness(ws);
   uplinks.add(ws);
   console.log(`uplink connected (${uplinks.size})`);
 

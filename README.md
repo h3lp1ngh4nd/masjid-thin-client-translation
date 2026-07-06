@@ -109,3 +109,11 @@ Save after starting:
   caption repopulates it.
 - Phone traffic goes to the VPS. If phones use masjid Wi-Fi, they still consume
   Wi-Fi airtime, but they no longer fan out from the local caption server.
+- Both legs send websocket pings every `HEARTBEAT_MS` (default 30s) and treat
+  a missed pong as a dead connection. This keeps the uplink alive through
+  NAT/proxy idle timeouts during the days between khutbahs and reaps dead
+  phone connections on the VPS. Keep any reverse-proxy read timeout above the
+  heartbeat interval.
+- `public/volg.html` is a verbatim copy of `app/templates/volg.html` from the
+  main live-caption repo (the page is fully static). When that file changes,
+  copy it here again — do not let the two drift.
