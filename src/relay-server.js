@@ -34,7 +34,7 @@ loadEnvFile();
 const host = process.env.HOST || "0.0.0.0";
 const port = Number.parseInt(process.env.PORT || "8080", 10);
 const relayToken = String(process.env.RELAY_TOKEN || "").trim();
-const maxCaptions = Math.max(1, Number.parseInt(process.env.MAX_CAPTIONS || "100", 10));
+const maxCaptions = Math.max(1, Number.parseInt(process.env.MAX_CAPTIONS || "1000", 10));
 const volgHeaderText = process.env.VOLG_HEADER_TEXT || "live";
 const volgEmptyText = process.env.VOLG_EMPTY_TEXT || "Wachten op vertaling...";
 const volgFooterText = process.env.VOLG_FOOTER_TEXT
@@ -64,6 +64,7 @@ function emptyState() {
     test_captions: [],
     captions: [],
     published_captions: [],
+    released_captions: [],
     display_caption_statuses: [],
     audit_events: [],
   };
@@ -94,6 +95,12 @@ function trimCaptionLists() {
     && state.published_captions.length > maxCaptions
   ) {
     state.published_captions = state.published_captions.slice(-maxCaptions);
+  }
+  if (
+    Array.isArray(state.released_captions)
+    && state.released_captions.length > maxCaptions
+  ) {
+    state.released_captions = state.released_captions.slice(-maxCaptions);
   }
 }
 
@@ -129,6 +136,9 @@ function applyMessage(message) {
       published_captions: Array.isArray(message.published_captions)
         ? [...message.published_captions]
         : [],
+      released_captions: Array.isArray(message.released_captions)
+        ? [...message.released_captions]
+        : (Array.isArray(message.captions) ? [...message.captions] : []),
       display_caption_statuses: Array.isArray(message.display_caption_statuses)
         ? [...message.display_caption_statuses]
         : [],
@@ -143,6 +153,10 @@ function applyMessage(message) {
     if (caption && caption.text) {
       if (!Array.isArray(state.captions)) state.captions = [];
       if (!hasCaption(state.captions, caption)) state.captions.push(caption);
+      if (!Array.isArray(state.released_captions)) state.released_captions = [];
+      if (!hasCaption(state.released_captions, caption)) {
+        state.released_captions.push(caption);
+      }
       trimCaptionLists();
     }
     return message;
@@ -151,6 +165,7 @@ function applyMessage(message) {
   if (message.type === "clear_captions") {
     state.captions = [];
     state.published_captions = [];
+    state.released_captions = [];
     state.display_caption_statuses = [];
     state.audit_events = [];
     return message;
@@ -174,6 +189,7 @@ function contentTypeFor(filePath) {
   if (filePath.endsWith(".html")) return "text/html; charset=utf-8";
   if (filePath.endsWith(".css")) return "text/css; charset=utf-8";
   if (filePath.endsWith(".js")) return "application/javascript; charset=utf-8";
+  if (filePath.endsWith(".ttf")) return "font/ttf";
   return "application/octet-stream";
 }
 
@@ -199,7 +215,8 @@ function renderVolgHtml(data) {
   return String(data)
     .replaceAll("__VOLG_HEADER_TEXT_JSON__", escapeScriptString(volgHeaderText))
     .replaceAll("__VOLG_EMPTY_TEXT__", escapeHtml(volgEmptyText))
-    .replaceAll("__VOLG_FOOTER_TEXT__", escapeHtml(volgFooterText));
+    .replaceAll("__VOLG_FOOTER_TEXT__", escapeHtml(volgFooterText))
+    .replaceAll("__MAX_CAPTIONS__", String(maxCaptions));
 }
 
 const server = http.createServer((req, res) => {
@@ -226,7 +243,9 @@ const server = http.createServer((req, res) => {
       res.end("Not found");
       return;
     }
-    res.writeHead(200, { "content-type": contentTypeFor(filePath) });
+    const headers = { "content-type": contentTypeFor(filePath) };
+    if (fileName === "volg.html") headers["cache-control"] = "no-store";
+    res.writeHead(200, headers);
     res.end(fileName === "volg.html" ? renderVolgHtml(data) : data);
   });
 });

@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node src/relay-server.js",
     "server": "node src/relay-server.js",
-    "check": "node --check src/relay-server.js"
+    "check": "node --check src/relay-server.js",
+    "test": "node --test"
   },
   "dependencies": {
     "ws": "^8.18.0"

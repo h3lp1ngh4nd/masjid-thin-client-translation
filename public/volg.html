@@ -7,6 +7,13 @@
   <title>Meelezen — Live Caption</title>
   <link rel="icon" href="data:," />
   <style>
+    @font-face {
+      font-family: "Noto Naskh Arabic Honorifics";
+      src: url("/NotoNaskhArabic-Regular.ttf") format("truetype");
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: swap;
+    }
     :root {
       color-scheme: dark;
       --bg: #0b1220;
@@ -59,6 +66,19 @@
       border-radius: 8px;
       padding: 0.6rem 0.8rem;
     }
+    .honorific {
+      display: inline-block;
+      direction: rtl;
+      unicode-bidi: isolate;
+      font-family: "Noto Naskh Arabic Honorifics", "DejaVu Sans", sans-serif;
+      font-size: 1.08em;
+      font-style: normal;
+      font-weight: 400;
+      line-height: 1;
+      vertical-align: -0.06em;
+      white-space: nowrap;
+    }
+    .no-break-segment { white-space: nowrap; }
     #empty {
       color: var(--status);
       text-align: center;
@@ -92,7 +112,7 @@
     const statusEl = document.getElementById('status');
     const captionsEl = document.getElementById('captions');
     const emptyEl = document.getElementById('empty');
-    const maxCaptions = 50;
+    const maxCaptions = __MAX_CAPTIONS__;
 
     let ws = null;
     let reconnectTimer = null;
@@ -121,6 +141,39 @@
       return ids;
     }
 
+    function protectLineStartPunctuation(text) {
+      return String(text || '').replace(/([,.;:!?،؛])/gu, '\u2060$1');
+    }
+
+    function appendCaptionText(row, text) {
+      const parts = String(text || '').split(/([\uFDFA\uFDFB])/u);
+      for (let index = 0; index < parts.length; index += 1) {
+        const part = parts[index];
+        if (!part) continue;
+        if (part === '\uFDFA' || part === '\uFDFB') {
+          const segment = document.createElement('span');
+          segment.className = 'no-break-segment';
+          const honorific = document.createElement('span');
+          honorific.className = 'honorific';
+          honorific.dir = 'rtl';
+          honorific.textContent = part;
+          segment.appendChild(honorific);
+
+          const nextPart = parts[index + 1] || '';
+          const punctuation = nextPart.match(/^([,.;:!?،؛]+)/u);
+          if (punctuation) {
+            segment.appendChild(document.createTextNode(punctuation[1]));
+            parts[index + 1] = nextPart.slice(punctuation[1].length);
+          }
+          row.appendChild(segment);
+        } else {
+          row.appendChild(
+            document.createTextNode(protectLineStartPunctuation(part))
+          );
+        }
+      }
+    }
+
     function addCaption(caption, scroll = true) {
       if (!caption || !caption.text) return;
       const ids = captionIds(caption);
@@ -135,7 +188,7 @@
       if (previous) previous.classList.remove('current');
       const row = document.createElement('p');
       row.className = 'caption current';
-      row.textContent = caption.text;
+      appendCaptionText(row, caption.text);
       captionsEl.appendChild(row);
       while (captionsEl.querySelectorAll('.caption').length > maxCaptions) {
         captionsEl.querySelector('.caption').remove();
@@ -177,7 +230,10 @@
             // reader was already at the bottom before the rebuild.
             const stickToBottom = nearBottom();
             clearCaptions();
-            (Array.isArray(message.captions) ? message.captions : [])
+            const releasedBackfill = Array.isArray(message.released_captions)
+              ? message.released_captions
+              : (Array.isArray(message.captions) ? message.captions : []);
+            releasedBackfill
               .forEach(caption => addCaption(caption, false));
             if (stickToBottom) {
               window.scrollTo({ top: document.documentElement.scrollHeight });

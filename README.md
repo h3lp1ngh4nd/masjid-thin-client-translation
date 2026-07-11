@@ -50,7 +50,7 @@ Create `.env` on the VPS:
 HOST=127.0.0.1
 PORT=8080
 RELAY_TOKEN=change-this
-MAX_CAPTIONS=100
+MAX_CAPTIONS=1000
 HEARTBEAT_MS=30000
 VOLG_HEADER_TEXT=live
 VOLG_EMPTY_TEXT=Wachten op vertaling...
@@ -115,7 +115,9 @@ Save after starting:
 
 ## Notes
 
-- The VPS stores recent caption state in memory only.
+- The VPS stores up to `MAX_CAPTIONS` released captions in memory only. The
+  default 1,000-caption history lets a refreshed phone scroll back to the
+  beginning of a normal khutbah session.
 - Restarting the VPS clears relay history; the next local `display_state` or
   caption repopulates it.
 - Phone traffic goes to the VPS. If phones use masjid Wi-Fi, they still consume
