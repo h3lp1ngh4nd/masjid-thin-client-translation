@@ -60,17 +60,24 @@ test("refresh backfills the full released stream and serves honorific font", asy
     headers: { "x-relay-token": "test-token" },
   });
   await once(uplink, "open");
+  const observer = new WebSocket(`ws://127.0.0.1:${port}/ws/view`);
+  const initialObserverState = once(observer, "message");
+  await once(observer, "open");
+  await initialObserverState;
+
   const released = Array.from({ length: 120 }, (_, index) => ({
     id: `released-${index}`,
     text: index === 0 ? "Allah ﷻ" : `Caption ${index}`,
   }));
+  const appliedState = once(observer, "message");
   uplink.send(JSON.stringify({
     type: "display_state",
     captions: released.slice(-30),
     published_captions: [...released, { id: "skipped", text: "Never shown" }],
     released_captions: released,
   }));
-  await new Promise((resolve) => setTimeout(resolve, 25));
+  const [rawAppliedState] = await appliedState;
+  assert.equal(JSON.parse(String(rawAppliedState)).type, "display_state");
 
   const viewer = new WebSocket(`ws://127.0.0.1:${port}/ws/view`);
   const stateMessage = once(viewer, "message");
@@ -100,6 +107,16 @@ test("refresh backfills the full released stream and serves honorific font", asy
   assert.equal(font.headers.get("content-type"), "font/ttf");
   assert.equal((await font.arrayBuffer()).byteLength, 197420);
 
+  const license = await fetch(
+    `http://127.0.0.1:${port}/OFL-NotoNaskhArabic.txt`,
+  );
+  assert.equal(license.status, 200);
+  assert.equal(license.headers.get("content-type"), "text/plain; charset=utf-8");
+  const licenseText = await license.text();
+  assert.match(licenseText, /Copyright 2022 The Noto Project Authors/);
+  assert.match(licenseText, /SIL OPEN FONT LICENSE Version 1\.1/);
+
   viewer.close();
+  observer.close();
   uplink.close();
 });

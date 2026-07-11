@@ -130,3 +130,6 @@ Save after starting:
 - `public/volg.html` mirrors `app/templates/volg.html` from the main
   live-caption repo, with relay-rendered placeholders for the configurable
   copy. When that file changes, update this repo and `git pull` on the VPS.
+- `public/NotoNaskhArabic-Regular.ttf` is distributed under the SIL Open Font
+  License 1.1; its copyright notice and license are in
+  `public/OFL-NotoNaskhArabic.txt`.
