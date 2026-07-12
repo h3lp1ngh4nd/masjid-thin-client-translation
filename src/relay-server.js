@@ -301,6 +301,11 @@ uplinkWss.on("connection", (ws) => {
     } catch {
       return;
     }
+    if (message?.type === "preflight_ping") {
+      const nonce = String(message.nonce || "").slice(0, 128);
+      if (nonce) sendJson(ws, { type: "preflight_pong", nonce });
+      return;
+    }
     const outbound = applyMessage(message);
     if (outbound) broadcast(outbound);
   });

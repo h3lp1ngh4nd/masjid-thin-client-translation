@@ -65,6 +65,21 @@ test("refresh backfills the full released stream and serves honorific font", asy
   await once(observer, "open");
   await initialObserverState;
 
+  const pongMessage = once(uplink, "message");
+  uplink.send(JSON.stringify({ type: "preflight_ping", nonce: "probe-123" }));
+  const [rawPong] = await pongMessage;
+  assert.deepEqual(JSON.parse(String(rawPong)), {
+    type: "preflight_pong",
+    nonce: "probe-123",
+  });
+
+  const stateAfterProbeViewer = new WebSocket(`ws://127.0.0.1:${port}/ws/view`);
+  const stateAfterProbeMessage = once(stateAfterProbeViewer, "message");
+  await once(stateAfterProbeViewer, "open");
+  const [rawStateAfterProbe] = await stateAfterProbeMessage;
+  assert.deepEqual(JSON.parse(String(rawStateAfterProbe)).captions, []);
+  stateAfterProbeViewer.close();
+
   const released = Array.from({ length: 120 }, (_, index) => ({
     id: `released-${index}`,
     text: index === 0 ? "Allah ﷻ" : `Caption ${index}`,

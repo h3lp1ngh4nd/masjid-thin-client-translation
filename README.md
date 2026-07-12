@@ -97,6 +97,8 @@ EXTERNAL_VOLG_RELAY_TOKEN=change-this
 
 The main app reconnects automatically and mirrors viewer messages best-effort.
 If the VPS is down, the local caption app continues normally.
+The authenticated uplink also answers the main app's no-op pre-flight nonce;
+that round-trip never changes stored captions or broadcasts to phones.
 
 ## PM2
 
